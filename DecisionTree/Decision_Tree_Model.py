@@ -6,10 +6,11 @@ from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler, LabelEncoder
 from sklearn.impute import SimpleImputer
 from sklearn.tree import DecisionTreeClassifier
-from sklearn.metrics import accuracy_score, roc_curve, roc_auc_score, auc
+from sklearn.metrics import accuracy_score, roc_curve, roc_auc_score, auc, confusion_matrix
 from sklearn.preprocessing import label_binarize
 import joblib
 import argparse
+import seaborn as sns
 
 # Define the label mapping
 label_mapping = {
@@ -73,6 +74,9 @@ def train_and_evaluate(X_train, X_test, y_train, y_test, classes,le):
     dtree = DecisionTreeClassifier(random_state=42)
     dtree.fit(X_train, y_train)
 
+    # Predict class labels, not probabilities
+    y_pred = dtree.predict(X_test) 
+
     # Binarize the labels for the entire range of actual class labels
     y_test_binarized = label_binarize(y_test, classes=classes)
 
@@ -81,6 +85,9 @@ def train_and_evaluate(X_train, X_test, y_train, y_test, classes,le):
     
     # Plot ROC Curve
     plot_multi_class_roc(y_test_binarized, y_pred_proba, classes,le)
+
+    # Plot Confusion Matrix
+    plot_confusion_matrix(y_test,  y_pred , [le.inverse_transform([i])[0] for i in range(len(classes))])
 
     return dtree
 
@@ -103,8 +110,32 @@ def plot_multi_class_roc(y_test, y_pred_proba, classes, le):
     plt.xlabel('False Positive Rate')
     plt.ylabel('True Positive Rate')
     plt.legend(loc="lower right")
-    plt.savefig("ROC.png")
-    plt.show()
+    plt.savefig("Decision Tree ROC.png")
+    #plt.show()
+    plt.close()
+
+def plot_confusion_matrix(y_true, y_pred, classes, title='Confusion Matrix', cmap=plt.cm.Blues):
+    """
+    This function prints and plots the confusion matrix.
+    """
+    cm = confusion_matrix(y_true, y_pred)
+    plt.figure(figsize=(8, 6))
+    sns.heatmap(cm, annot=True, fmt='d', cmap=cmap, xticklabels=classes, yticklabels=classes)
+    plt.title(title)
+    plt.ylabel('True label')
+    plt.xlabel('Predicted label')
+
+    # Highlighting each cell
+    thresh = cm.max() / 2.
+    for i in range(cm.shape[0]):
+        for j in range(cm.shape[1]):
+            plt.text(j + 0.5, i + 0.5, format(cm[i, j], 'd'),
+                     horizontalalignment='center',
+                     color='white' if cm[i, j] > thresh else 'black')
+
+    plt.tight_layout()
+    plt.savefig("Decision Tree Confusion_matrix.png")
+    plt.close()  # Close the plot to free up memory
 
 # Function to save model and scaler
 def save_model(dtree_model, scaler, le, model_path='dtree_model.joblib', scaler_path='scaler.joblib', le_path='label_encoder.joblib'):
@@ -119,9 +150,9 @@ def save_model(dtree_model, scaler, le, model_path='dtree_model.joblib', scaler_
     full_le_path = os.path.join(base_dir, le_path)
 
     # Save the model, scaler, and label encoder in the specified directory
-    joblib.dump(dtree_model, full_model_path)
-    joblib.dump(scaler, full_scaler_path)
-    joblib.dump(le, full_le_path)
+    joblib.dump(dtree_model, model_path)
+    joblib.dump(scaler, scaler_path)
+    joblib.dump(le, le_path)
 
 def preprocess_new_data(new_data_path, scaler):
     try:
