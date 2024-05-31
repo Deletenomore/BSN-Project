@@ -13,8 +13,16 @@ import argparse
 
 # Define the label mapping
 label_mapping = {
-    '901': 0, '902': 1, '903': 2, '904': 3, '905': 4,
-    '906': 5, '907': 6, '908': 7, '909': 8, '910': 9
+    '901': 'front-sitting',
+    '902': 'front-protecting',
+    '903': 'front-knees',
+    '904': 'front-knees-lying',
+    '905': 'front-quick-recovery',
+    '906': 'front-slow-recovery',
+    '907': 'front-right',
+    '908': 'front-left',
+    '909': 'back-sitting',
+    '910': 'back-knees'
 }
 
 # Function to load data from the dataset structure
@@ -22,8 +30,9 @@ def load_data(base_path):
     data = []
     labels = []
     for label_folder in os.listdir(base_path):
-        label_id = label_mapping.get(label_folder.split('-')[0])
-        if label_id is None:
+        label_id = label_folder.split('-')[0]
+        label = label_mapping.get(label_id)
+        if label is None:
             continue
         label_folder_path = os.path.join(base_path, label_folder)
         for volunteer_folder in os.listdir(label_folder_path):
@@ -41,7 +50,7 @@ def load_data(base_path):
                 combined_data = [arr[:min_length] for arr in combined_data]
                 combined_data = np.concatenate(combined_data, axis=1)
                 data.append(combined_data)
-                labels.append(label_id)
+                labels.append(label)
     max_length = max(len(d) for d in data)
     data = [np.pad(d, ((0, max_length - len(d)), (0, 0)), 'constant') for d in data]
     return np.array(data), np.array(labels)
@@ -99,10 +108,15 @@ def plot_multi_class_roc(y_test, y_pred_proba, classes, le):
 
 # Function to save model and scaler
 def save_model(dtree_model, scaler, le, model_path='dtree_model.joblib', scaler_path='scaler.joblib', le_path='label_encoder.joblib'):
+     # Create directory if not exists
+    base_dir = "trained_model"
+    if not os.path.exists(base_dir):
+        os.makedirs(base_dir)
+
     # Define full paths for saving model components
-    full_model_path = os.path.join("trained_model", model_path)
-    full_scaler_path = os.path.join("trained_model", scaler_path)
-    full_le_path = os.path.join("trained_model", le_path)
+    full_model_path = os.path.join(base_dir, model_path)
+    full_scaler_path = os.path.join(base_dir, scaler_path)
+    full_le_path = os.path.join(base_dir, le_path)
 
     # Save the model, scaler, and label encoder in the specified directory
     joblib.dump(dtree_model, full_model_path)
@@ -174,9 +188,7 @@ if __name__ == "__main__":
             exit(1)
         X_train, X_test, y_train, y_test, scaler, le, classes = preprocess_data(args.dataset)
         
-         # Create directory if not exists
-        if not os.path.exists("trained_model"):
-            os.makedirs("trained_model")
+        
 
         classes = np.unique(y_train)  # Get the list of unique classes
         dtree_model = train_and_evaluate(X_train, X_test, y_train, y_test, classes,le)
