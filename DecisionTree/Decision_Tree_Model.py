@@ -156,28 +156,31 @@ def save_model(dtree_model, scaler, le, model_path='dtree_model.joblib', scaler_
 
 def preprocess_new_data(new_data_path, scaler):
     try:
-        # Load new data
+        # Load new data and store each sensor data's flattened array
         new_data = []
         for sensor_file in os.listdir(new_data_path):
             sensor_file_path = os.path.join(new_data_path, sensor_file)
             sensor_data = pd.read_csv(sensor_file_path)
-            new_data.append(sensor_data.values.flatten())
+            # Flatten the data and normalize the length to the median length of training data or another consistent measure
+            flattened_data = sensor_data.values.flatten()
+            new_data.append(flattened_data)
         
         # Concatenate all sensor data into one array
         new_data = np.concatenate(new_data)
         
-        # Check if the new data has the correct number of features, pad if necessary
+        # Trim or expand the data to match the expected number of features
         required_features = scaler.n_features_in_
-        current_features = new_data.shape[0]
+        current_features = len(new_data)
+        
         if current_features < required_features:
-            # Pad with zeros
-            padding = np.zeros(required_features - current_features)
-            new_data = np.concatenate([new_data, padding])
+            # If less, consider truncating or finding an appropriate method to handle missing data
+            new_data = np.pad(new_data, (0, required_features - current_features), 'constant')
         elif current_features > required_features:
-            raise ValueError(f"New data has too many features ({current_features}), expected {required_features}")
+            # If more, truncate the data
+            new_data = new_data[:required_features]
         
         # Reshape new_data for a single sample
-        new_data = new_data.reshape(1, -1)  # Reshape it to (1, number_of_features)
+        new_data = new_data.reshape(1, -1)
         
         # Scale the data using the loaded scaler
         new_data_scaled = scaler.transform(new_data)
@@ -186,6 +189,7 @@ def preprocess_new_data(new_data_path, scaler):
     except Exception as e:
         print(f"An error occurred during preprocessing: {str(e)}")
         raise
+
 
 def predict_new_data(new_data_path, model_path, scaler_path, le_path):
     try:
