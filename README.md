@@ -20,8 +20,8 @@ For demonstrating purpose, we selected 10 Fall actions for building up our model
     * Right thigh sensor
     * Right ankle sensor 
   - Labels:
-    * 901-front-sitting
-    * 902-front-protecting
+    * 901-front-lying
+    * 902-front-protecting-lying
     * 903-front-knees
     * 904-front-knees-lying
     * 905-front-quick-recovery
@@ -29,5 +29,5 @@ For demonstrating purpose, we selected 10 Fall actions for building up our model
     * 907-front-right
     * 908-front-left
     * 909-back-sitting
-    * 910-back-knees
+    * 910-back-lying
 
