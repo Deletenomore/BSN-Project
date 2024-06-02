@@ -14,8 +14,8 @@ import seaborn as sns
 
 # Define the label mapping
 label_mapping = {
-    '901': 'front-sitting',
-    '902': 'front-protecting',
+    '901': 'front-lying',
+    '902': 'front-protecting-lying',
     '903': 'front-knees',
     '904': 'front-knees-lying',
     '905': 'front-quick-recovery',
@@ -23,7 +23,7 @@ label_mapping = {
     '907': 'front-right',
     '908': 'front-left',
     '909': 'back-sitting',
-    '910': 'back-knees'
+    '910': 'back-lying'
 }
 
 # Function to load data from the dataset structure
@@ -67,7 +67,7 @@ def preprocess_data(base_path):
     le = LabelEncoder()
     labels = le.fit_transform(labels)
     X_train, X_test, y_train, y_test = train_test_split(data, labels, test_size=0.2, random_state=42)
-    return X_train, X_test, y_train, y_test, scaler, le, le.classes_
+    return X_train, X_test, y_train, y_test, scaler, le, le.classes_,imputer
 
 # Function to train Decision Tree model and evaluate with ROC AUC
 def train_and_evaluate(X_train, X_test, y_train, y_test, classes,le):
@@ -138,7 +138,7 @@ def plot_confusion_matrix(y_true, y_pred, classes, title='Confusion Matrix', cma
     plt.close()  # Close the plot to free up memory
 
 # Function to save model and scaler
-def save_model(dtree_model, scaler, le, model_path='dtree_model.joblib', scaler_path='scaler.joblib', le_path='label_encoder.joblib'):
+def save_model(dtree_model, scaler, le, imputer, model_path='dtree_model.joblib', scaler_path='scaler.joblib', le_path='label_encoder.joblib', imputer_path='imputer.joblib'):
      # Create directory if not exists
     base_dir = "trained_model"
     if not os.path.exists(base_dir):
@@ -148,41 +148,42 @@ def save_model(dtree_model, scaler, le, model_path='dtree_model.joblib', scaler_
     full_model_path = os.path.join(base_dir, model_path)
     full_scaler_path = os.path.join(base_dir, scaler_path)
     full_le_path = os.path.join(base_dir, le_path)
+    full_imputer_path = os.path.join(base_dir, imputer_path)
 
     # Save the model, scaler, and label encoder in the specified directory
     joblib.dump(dtree_model, model_path)
     joblib.dump(scaler, scaler_path)
     joblib.dump(le, le_path)
+    joblib.dump(imputer, imputer_path)
 
-def preprocess_new_data(new_data_path, scaler):
+def preprocess_new_data(new_data_path, scaler, imputer):
     try:
         # Load new data and store each sensor data's flattened array
         new_data = []
+        min_length = None
         for sensor_file in os.listdir(new_data_path):
             sensor_file_path = os.path.join(new_data_path, sensor_file)
             sensor_data = pd.read_csv(sensor_file_path)
-            # Flatten the data and normalize the length to the median length of training data or another consistent measure
-            flattened_data = sensor_data.values.flatten()
-            new_data.append(flattened_data)
-        
-        # Concatenate all sensor data into one array
-        new_data = np.concatenate(new_data)
-        
-        # Trim or expand the data to match the expected number of features
-        required_features = scaler.n_features_in_
-        current_features = len(new_data)
-        
-        if current_features < required_features:
-            # If less, consider truncating or finding an appropriate method to handle missing data
-            new_data = np.pad(new_data, (0, required_features - current_features), 'constant')
-        elif current_features > required_features:
-            # If more, truncate the data
-            new_data = new_data[:required_features]
-        
-        # Reshape new_data for a single sample
+            if min_length is None or len(sensor_data) < min_length:
+                min_length = len(sensor_data)
+            new_data.append(sensor_data.values)
+
+        # Normalize the length of all sensor data arrays
+        new_data = [arr[:min_length] for arr in new_data]
+        new_data = np.concatenate(new_data, axis=1)
+
+        # Flatten the data and reshape for compatibility with scaler and imputer
+        total_features = imputer.n_features_in_
+        new_data = new_data.flatten()
+        if new_data.shape[0] < total_features:
+            new_data = np.pad(new_data, (0, total_features - new_data.shape[0]), 'constant')
+        elif new_data.shape[0] > total_features:
+            new_data = new_data[:total_features]
+
         new_data = new_data.reshape(1, -1)
-        
-        # Scale the data using the loaded scaler
+
+        # Impute and scale the data
+        new_data = imputer.transform(new_data)
         new_data_scaled = scaler.transform(new_data)
 
         return new_data_scaled
@@ -191,13 +192,14 @@ def preprocess_new_data(new_data_path, scaler):
         raise
 
 
-def predict_new_data(new_data_path, model_path, scaler_path, le_path):
+def predict_new_data(new_data_path, model_path, scaler_path, le_path, imputer_path):
     try:
         dtree_model = joblib.load(model_path)
         scaler = joblib.load(scaler_path)
         le = joblib.load(le_path)
+        imputer = joblib.load(imputer_path)
 
-        new_data_scaled = preprocess_new_data(new_data_path, scaler)
+        new_data_scaled = preprocess_new_data(new_data_path, scaler, imputer)
         prediction = dtree_model.predict(new_data_scaled)
         predicted_label = le.inverse_transform(prediction)
 
@@ -205,6 +207,7 @@ def predict_new_data(new_data_path, model_path, scaler_path, le_path):
     except Exception as e:
         print(f"An error occurred during prediction: {str(e)}")
         raise
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Train or Predict using Decision Tree model for fall detection")
@@ -214,6 +217,8 @@ if __name__ == "__main__":
     parser.add_argument('--model', type=str, default='trained_model/dtree_model.joblib', help="Path to save or load the model")
     parser.add_argument('--scaler', type=str, default='trained_model/scaler.joblib', help="Path to save or load the scaler")
     parser.add_argument('--label_encoder', type=str, default='trained_model/label_encoder.joblib', help="Path to save or load the label encoder")
+    parser.add_argument('--imputer', type=str, default='trained_model/imputer.joblib', help="Path to save or load the imputer")
+
 
     args = parser.parse_args()
 
@@ -221,7 +226,7 @@ if __name__ == "__main__":
         if not args.dataset:
             print("Please provide the path to the dataset using --dataset")
             exit(1)
-        X_train, X_test, y_train, y_test, scaler, le, classes = preprocess_data(args.dataset)
+        X_train, X_test, y_train, y_test, scaler, le, classes,imputer = preprocess_data(args.dataset)
         
         
 
@@ -233,11 +238,11 @@ if __name__ == "__main__":
         test_accuracy = accuracy_score(y_test, y_test_pred)
         print(f'Test Accuracy: {test_accuracy:.2f}')
         
-        save_model(dtree_model, scaler, le, args.model, args.scaler, args.label_encoder)
+        save_model(dtree_model, scaler, le, imputer, args.model, args.scaler, args.label_encoder,args.imputer)
         
     elif args.mode == 'predict':
         if not args.new_data:
             print("Please provide the path to the new data using --new_data")
             exit(1)
-        prediction = predict_new_data(args.new_data, args.model, args.scaler, args.label_encoder)
+        prediction = predict_new_data(args.new_data, args.model, args.scaler, args.label_encoder, args.imputer)
         print(f'Predicted Fall Action Label: {prediction[0]}')
