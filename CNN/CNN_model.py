@@ -15,8 +15,8 @@ import pandas as pd
 import joblib
 from sklearn.preprocessing import MinMaxScaler, LabelEncoder
 from sklearn.model_selection import train_test_split
-from tensorflow.keras.models import Sequential, load_model
-from tensorflow.keras.layers import Dense, LSTM, Conv1D, MaxPooling1D, Flatten, TimeDistributed, Dropout, Bidirectional, BatchNormalization
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.layers import Dense, Conv1D, MaxPooling1D, Flatten, Dropout, BatchNormalization
 from tensorflow.keras.optimizers import Adam
 import matplotlib.pyplot as plt
 import argparse
@@ -74,28 +74,38 @@ def load_and_preprocess_data(base_path):
     labels = le.fit_transform(labels)
     return data, labels, scaler, le
 
-def build_cnn_lstm_model(input_shape):
+def build_cnn_model(input_shape):
     model = Sequential()
-    model.add(TimeDistributed(Conv1D(filters=64, kernel_size=3, activation='relu'), input_shape=input_shape))
-    model.add(TimeDistributed(BatchNormalization()))  # Adding Batch Normalization
-    model.add(TimeDistributed(MaxPooling1D(pool_size=2)))
-    model.add(TimeDistributed(Flatten()))
-    model.add(Bidirectional(LSTM(50, return_sequences=True)))  # Using Bidirectional LSTM
-    model.add(Dropout(0.5))  # Adding Dropout
-    model.add(Bidirectional(LSTM(30)))  # Another LSTM layer for deeper extraction
-    model.add(Dense(10, activation='softmax'))
+    # First convolutional layer
+    model.add(Conv1D(filters=64, kernel_size=3, activation='relu', input_shape=input_shape))
+    model.add(BatchNormalization())
+    model.add(MaxPooling1D(pool_size=2))
+    model.add(Dropout(0.2))
+
+    # Second convolutional layer
+    model.add(Conv1D(filters=128, kernel_size=3, activation='relu'))
+    model.add(BatchNormalization())
+    model.add(MaxPooling1D(pool_size=2))
+    model.add(Dropout(0.3))
+
+    # Flatten and dense layers
+    model.add(Flatten())
+    model.add(Dense(100, activation='relu'))
+    model.add(Dropout(0.4))
+    model.add(Dense(10, activation='softmax'))  # Assuming 10 classes for classification
+
+    # Compile the model
     optimizer = Adam(learning_rate=0.001)
     model.compile(optimizer=optimizer, loss='sparse_categorical_crossentropy', metrics=['accuracy'])
     return model
 
 def train_model(data, labels):
     X_train, X_test, y_train, y_test = train_test_split(data, labels, test_size=0.2, random_state=42)
-    n_seq = 2
-    n_steps = X_train.shape[1] // n_seq
-    n_features = 1
-    X_train = X_train.reshape((X_train.shape[0], n_seq, n_steps, n_features))
-    X_test = X_test.reshape((X_test.shape[0], n_seq, n_steps, n_features))
-    model = build_cnn_lstm_model((n_seq, n_steps, n_features))
+    # Ensure data is in the correct shape for a 1D CNN (samples, time steps, features)
+    X_train = X_train.reshape((X_train.shape[0], X_train.shape[1], 1))  # Reshape for CNN, assuming each feature is a separate channel
+    X_test = X_test.reshape((X_test.shape[0], X_test.shape[1], 1))
+    
+    model = build_cnn_model((X_train.shape[1], 1))  # Input shape is (time steps, features)
     history = model.fit(X_train, y_train, epochs=20, validation_data=(X_test, y_test))
     plot_accuracy(history)
     return model, history
@@ -131,11 +141,11 @@ def load_and_predict(model_path, new_data):
 
 if __name__ == "__main__":
     import argparse
-    parser = argparse.ArgumentParser(description="Train and Predict using CNN-LSTM Model")
+    parser = argparse.ArgumentParser(description="Train and Predict using CNN Model")
     parser.add_argument('mode', choices=['train', 'predict'], help="Mode: train a new model or predict using an existing model")
     parser.add_argument('--dataset', type=str, help="Path to the dataset directory for training")
     parser.add_argument('--new_data', type=str, help="Path to new data for prediction")
-    parser.add_argument('--model', type=str, default='cnn_lstm_model.h5', help="Path to save or load the model")
+    parser.add_argument('--model', type=str, default='cnn_model.h5', help="Path to save or load the model")
 
     args = parser.parse_args()
 
@@ -157,3 +167,4 @@ if __name__ == "__main__":
             prediction = load_and_predict(args.model, args.new_data, scaler)
             predicted_label = le.inverse_transform([np.argmax(prediction)])
             print(f'Predicted Label: {predicted_label[0]}')
+
