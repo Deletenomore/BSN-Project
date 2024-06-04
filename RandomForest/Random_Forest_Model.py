@@ -1,4 +1,5 @@
-# To run the provided Python script (Decision_Tree_Model.py) from the command line and utilize its functionalities for training or predicting, follow these steps to create a comprehensive guide:
+
+# To run the provided Python script (Random_Forest_Model.py) from the command line and utilize its functionalities for training or predicting, follow these steps to create a comprehensive guide:
 
 # Requirements
 # Ensure Python 3 and pip are installed on your system.
@@ -32,19 +33,20 @@
 # --scaler <path_to_scaler>: Path for the scaler file.
 # --label_encoder <path_to_label_encoder>: Path for the label encoder file.
 # --imputer <path_to_imputer>: Path for the imputer file.
+
 import os
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 from sklearn.model_selection import train_test_split
-from sklearn.preprocessing import StandardScaler, LabelEncoder
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.metrics import accuracy_score, classification_report, confusion_matrix,auc,roc_curve
+from sklearn.preprocessing import StandardScaler, LabelEncoder, label_binarize
 from sklearn.impute import SimpleImputer
-from sklearn.tree import DecisionTreeClassifier
-from sklearn.metrics import accuracy_score, roc_curve, roc_auc_score, auc, confusion_matrix
-from sklearn.preprocessing import label_binarize
 import joblib
 import argparse
 import seaborn as sns
+from itertools import cycle
 
 # Define the label mapping
 label_mapping = {
@@ -60,7 +62,6 @@ label_mapping = {
     '910': 'back-lying'
 }
 
-# Function to load data from the dataset structure
 def load_data(base_path):
     data = []
     labels = []
@@ -90,7 +91,6 @@ def load_data(base_path):
     data = [np.pad(d, ((0, max_length - len(d)), (0, 0)), 'constant') for d in data]
     return np.array(data), np.array(labels)
 
-# Function to preprocess data
 def preprocess_data(base_path):
     data, labels = load_data(base_path)
     data = data.reshape(data.shape[0], -1)
@@ -101,94 +101,87 @@ def preprocess_data(base_path):
     le = LabelEncoder()
     labels = le.fit_transform(labels)
     X_train, X_test, y_train, y_test = train_test_split(data, labels, test_size=0.2, random_state=42)
-    return X_train, X_test, y_train, y_test, scaler, le, le.classes_,imputer
+    classes = np.unique(labels)
+    return X_train, X_test, y_train, y_test, scaler, le, classes,imputer
 
-# Function to train Decision Tree model and evaluate with ROC AUC
 def train_and_evaluate(X_train, X_test, y_train, y_test, classes,le):
-    dtree = DecisionTreeClassifier(random_state=42)
-    dtree.fit(X_train, y_train)
-
-    # Predict class labels, not probabilities
-    y_pred = dtree.predict(X_test) 
-
-    # Binarize the labels for the entire range of actual class labels
-    y_test_binarized = label_binarize(y_test, classes=classes)
-
-    # Predict probabilities
-    y_pred_proba = dtree.predict_proba(X_test)
+    model = RandomForestClassifier(n_estimators=100, random_state=42)
+    model.fit(X_train, y_train)
     
-    # Plot ROC Curve
-    plot_multi_class_roc(y_test_binarized, y_pred_proba, classes,le)
+    y_pred = model.predict(X_test)
+    accuracy = accuracy_score(y_test, y_pred)
+    y_score = model.predict_proba(X_test)  # Get class probabilities for ROC
+    print(f"Accuracy: {accuracy * 100:.2f}%")
+    print("Classification Report:\n", classification_report(y_test, y_pred))
+    
+     # Plot ROC Curve and Confusion Matrix
+    n_classes = len(le.classes_)
+    plot_roc_curve(y_test, y_score, n_classes, le)
+    plot_confusion_matrix(y_test, y_pred, [le.inverse_transform([i])[0] for i in range(n_classes)])
 
-    # Plot Confusion Matrix
-    plot_confusion_matrix(y_test,  y_pred , [le.inverse_transform([i])[0] for i in range(len(classes))])
+    return model
 
-    return dtree
+def plot_roc_curve(y_test, y_score, n_classes, le):
+    # Binarize the output
+    y_test = label_binarize(y_test, classes=[i for i in range(n_classes)])
+    fpr = dict()
+    tpr = dict()
+    roc_auc = dict()
 
-def plot_multi_class_roc(y_test, y_pred_proba, classes, le):
-    # Compute ROC curve and ROC area for each class
-    fpr = {}
-    tpr = {}
-    roc_auc = {}
-    for i, label in enumerate(classes):
-        fpr[label], tpr[label], _ = roc_curve(y_test[:, i], y_pred_proba[:, i])
-        roc_auc[label] = auc(fpr[label], tpr[label])
+    for i in range(n_classes):
+        fpr[i], tpr[i], _ = roc_curve(y_test[:, i], y_score[:, i])
+        roc_auc[i] = auc(fpr[i], tpr[i])
 
     # Plot all ROC curves
     plt.figure()
-    for i in range(len(classes)):
-        label = le.inverse_transform([classes[i]])[0]  # Use inverse_transform to get original labels
-        plt.plot(fpr[classes[i]], tpr[classes[i]], label=f'ROC curve of class {label} (area = {roc_auc[classes[i]]:.2f})')
+    colors = cycle(['blue', 'red', 'green', 'yellow', 'orange', 'purple', 'cyan', 'magenta', 'lime', 'gray'])
+    for i, color in zip(range(n_classes), colors):
+        plt.plot(fpr[i], tpr[i], color=color, lw=2,
+                 label='ROC curve of class {0} (area = {1:0.2f})'
+                       ''.format(le.inverse_transform([i])[0], roc_auc[i]))
 
-    plt.title('Multi-class ROC curve')
+    plt.plot([0, 1], [0, 1], 'k--', lw=2)
+    plt.xlim([0.0, 1.0])
+    plt.ylim([0.0, 1.05])
     plt.xlabel('False Positive Rate')
     plt.ylabel('True Positive Rate')
+    plt.title('Multi-class ROC Curve')
     plt.legend(loc="lower right")
-    plt.savefig("Decision Tree ROC.png")
-    #plt.show()
-    plt.close()
+    plt.savefig("Random_Forest_ROC")
+    plt.close() 
 
-def plot_confusion_matrix(y_true, y_pred, classes, title='Confusion Matrix', cmap=plt.cm.Blues):
-    """
-    This function prints and plots the confusion matrix.
-    """
+def plot_confusion_matrix(y_true, y_pred, classes):
     cm = confusion_matrix(y_true, y_pred)
-    plt.figure(figsize=(8, 6))
-    sns.heatmap(cm, annot=True, fmt='d', cmap=cmap, xticklabels=classes, yticklabels=classes)
-    plt.title(title)
-    plt.ylabel('True label')
-    plt.xlabel('Predicted label')
+    plt.figure(figsize=(10, 8))
+    sns.heatmap(cm, annot=True, fmt='d', xticklabels=classes, yticklabels=classes, cmap=plt.cm.Blues)
+    plt.title('Confusion Matrix')
+    plt.ylabel('True Label')
+    plt.xlabel('Predicted Label')
+    plt.savefig("Random_Forest_CM")
+    plt.close() 
 
-    # Highlighting each cell
-    thresh = cm.max() / 2.
-    for i in range(cm.shape[0]):
-        for j in range(cm.shape[1]):
-            plt.text(j + 0.5, i + 0.5, format(cm[i, j], 'd'),
-                     horizontalalignment='center',
-                     color='white' if cm[i, j] > thresh else 'black')
+def save_model(model, scaler, label_encoder, imputer, model_path, scaler_path, label_encoder_path, imputer_path):
+    """
+    Saves the model and its associated preprocessing components to disk.
 
-    plt.tight_layout()
-    plt.savefig("Decision Tree Confusion_matrix.png")
-    plt.close()  # Close the plot to free up memory
-
-# Function to save model and scaler
-def save_model(dtree_model, scaler, le, imputer, model_path='dtree_model.joblib', scaler_path='scaler.joblib', le_path='label_encoder.joblib', imputer_path='imputer.joblib'):
-     # Create directory if not exists
-    base_dir = "trained_model"
-    if not os.path.exists(base_dir):
-        os.makedirs(base_dir)
-
-    # Define full paths for saving model components
-    full_model_path = os.path.join(base_dir, model_path)
-    full_scaler_path = os.path.join(base_dir, scaler_path)
-    full_le_path = os.path.join(base_dir, le_path)
-    full_imputer_path = os.path.join(base_dir, imputer_path)
-
-    # Save the model, scaler, and label encoder in the specified directory
-    joblib.dump(dtree_model, model_path)
+    Args:
+    model (RandomForestClassifier): Trained model to be saved.
+    scaler (StandardScaler): Scaler used for data normalization.
+    label_encoder (LabelEncoder): Encoder used for transforming labels.
+    imputer (SimpleImputer): Imputer used for filling missing values.
+    model_path (str): File path to save the trained model.
+    scaler_path (str): File path to save the scaler.
+    label_encoder_path (str): File path to save the label encoder.
+    imputer_path (str): File path to save the imputer.
+    """
+    if not os.path.exists(os.path.dirname(model_path)):
+        os.makedirs(os.path.dirname(model_path))
+    joblib.dump(model, model_path)
     joblib.dump(scaler, scaler_path)
-    joblib.dump(le, le_path)
+    joblib.dump(label_encoder, label_encoder_path)
     joblib.dump(imputer, imputer_path)
+    print(f"Model components saved successfully:\nModel: {model_path}\nScaler: {scaler_path}\nLabel Encoder: {label_encoder_path}\nImputer: {imputer_path}")
+
 
 def preprocess_new_data(new_data_path, scaler, imputer):
     try:
@@ -228,13 +221,13 @@ def preprocess_new_data(new_data_path, scaler, imputer):
 
 def predict_new_data(new_data_path, model_path, scaler_path, le_path, imputer_path):
     try:
-        dtree_model = joblib.load(model_path)
+        rForest_model = joblib.load(model_path)
         scaler = joblib.load(scaler_path)
         le = joblib.load(le_path)
         imputer = joblib.load(imputer_path)
 
         new_data_scaled = preprocess_new_data(new_data_path, scaler, imputer)
-        prediction = dtree_model.predict(new_data_scaled)
+        prediction = rForest_model.predict(new_data_scaled)
         predicted_label = le.inverse_transform(prediction)
 
         return predicted_label
@@ -242,17 +235,15 @@ def predict_new_data(new_data_path, model_path, scaler_path, le_path, imputer_pa
         print(f"An error occurred during prediction: {str(e)}")
         raise
 
-
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Train or Predict using Decision Tree model for fall detection")
+    parser = argparse.ArgumentParser(description="Train or Predict using RandomForest model for data classification")
     parser.add_argument('mode', choices=['train', 'predict'], help="Mode: train a new model or predict using an existing model")
     parser.add_argument('--dataset', type=str, help="Path to the dataset directory for training")
     parser.add_argument('--new_data', type=str, help="Path to the new data directory for prediction")
-    parser.add_argument('--model', type=str, default='trained_model/dtree_model.joblib', help="Path to save or load the model")
+    parser.add_argument('--model', type=str, default='trained_model/model.joblib', help="Path to save or load the model")
     parser.add_argument('--scaler', type=str, default='trained_model/scaler.joblib', help="Path to save or load the scaler")
     parser.add_argument('--label_encoder', type=str, default='trained_model/label_encoder.joblib', help="Path to save or load the label encoder")
     parser.add_argument('--imputer', type=str, default='trained_model/imputer.joblib', help="Path to save or load the imputer")
-
 
     args = parser.parse_args()
 
@@ -260,23 +251,15 @@ if __name__ == "__main__":
         if not args.dataset:
             print("Please provide the path to the dataset using --dataset")
             exit(1)
-        X_train, X_test, y_train, y_test, scaler, le, classes,imputer = preprocess_data(args.dataset)
-        
-        
-
-        classes = np.unique(y_train)  # Get the list of unique classes
-        dtree_model = train_and_evaluate(X_train, X_test, y_train, y_test, classes,le)
-        
-        # Evaluate the model on the test set
-        y_test_pred = dtree_model.predict(X_test)
-        test_accuracy = accuracy_score(y_test, y_test_pred)
-        print(f'Test Accuracy: {test_accuracy:.2f}')
-        
-        save_model(dtree_model, scaler, le, imputer, args.model, args.scaler, args.label_encoder,args.imputer)
-        
+        X_train, X_test, y_train, y_test, scaler, le, classes, imputer = preprocess_data(args.dataset)
+        model = train_and_evaluate(X_train, X_test, y_train, y_test,classes,le)
+        save_model(model, scaler, le, imputer, args.model, args.scaler, args.label_encoder, args.imputer)
+        print(f'Test Accuracy: {accuracy_score(y_test, model.predict(X_test)):.2f}')
     elif args.mode == 'predict':
         if not args.new_data:
             print("Please provide the path to the new data using --new_data")
             exit(1)
         prediction = predict_new_data(args.new_data, args.model, args.scaler, args.label_encoder, args.imputer)
         print(f'Predicted Fall Action Label: {prediction[0]}')
+
+
