@@ -47,6 +47,11 @@ import joblib
 import argparse
 import seaborn as sns
 from itertools import cycle
+import warnings
+from sklearn.exceptions import InconsistentVersionWarning
+
+# Suppress only the InconsistentVersionWarning
+warnings.filterwarnings("ignore", category=InconsistentVersionWarning)
 
 # Define the label mapping
 label_mapping = {
@@ -161,19 +166,7 @@ def plot_confusion_matrix(y_true, y_pred, classes):
     plt.close() 
 
 def save_model(model, scaler, label_encoder, imputer, model_path, scaler_path, label_encoder_path, imputer_path):
-    """
-    Saves the model and its associated preprocessing components to disk.
 
-    Args:
-    model (RandomForestClassifier): Trained model to be saved.
-    scaler (StandardScaler): Scaler used for data normalization.
-    label_encoder (LabelEncoder): Encoder used for transforming labels.
-    imputer (SimpleImputer): Imputer used for filling missing values.
-    model_path (str): File path to save the trained model.
-    scaler_path (str): File path to save the scaler.
-    label_encoder_path (str): File path to save the label encoder.
-    imputer_path (str): File path to save the imputer.
-    """
     if not os.path.exists(os.path.dirname(model_path)):
         os.makedirs(os.path.dirname(model_path))
     joblib.dump(model, model_path)
