@@ -178,6 +178,30 @@ def plot_confusion_matrix(y_true, y_pred, classes):
     plt.savefig('CNN_With_Feature_Selection_Confusion_Matrix.png')  # Save confusion matrix
     #plt.show()
 
+def plot_training_accuracy(history, title='Model Accuracy', show_grid=True):
+    """
+    Plots the training and validation accuracy from a Keras model training history.
+    
+    Parameters:
+    - history: Return value from model.fit() method, which is a Keras History object.
+    - title: str, optional. Title of the graph.
+    - show_grid: bool, optional. If True, displays a grid on the graph.
+    """
+    plt.figure(figsize=(10, 6))
+    plt.plot(history.history['accuracy'], label='Train')
+    if 'val_accuracy' in history.history:
+        plt.plot(history.history['val_accuracy'], label='Validation')
+    
+    plt.title(title)
+    plt.ylabel('Accuracy')
+    plt.xlabel('Epoch')
+    plt.legend(loc='upper left')
+    
+    if show_grid:
+        plt.grid(True)
+    plt.savefig('CNN_With_Feature_Selection_Accuracy.png')
+    #plt.show()
+
 # Main script using argparse to handle command-line arguments
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Train a CNN model on sensor data.')
@@ -198,6 +222,7 @@ if __name__ == "__main__":
 
         test_loss, test_accuracy = model.evaluate(X_test, y_test)
         print(f"Test accuracy: {test_accuracy * 100:.2f}%")
+        
 
         y_pred = model.predict(X_test)
         y_test_binarized = label_binarize(y_test, classes=[i for i in range(num_classes)])
@@ -205,5 +230,6 @@ if __name__ == "__main__":
 
         plot_roc_curve(y_test_binarized, y_pred, num_classes, class_names)
         plot_confusion_matrix(y_test, y_pred.argmax(axis=1), class_names)
+        plot_training_accuracy(history, title='Training and Validation Accuracy', show_grid=True)
     else:
         print("Failed to load data.")
