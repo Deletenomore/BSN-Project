@@ -1,0 +1,5 @@
+Preprocess the datasets (6 sensors) by a feature selection rule as follows,
+1. Identify the peak of total acceleration of the accelerometer, A(T). A(T) = squareroot(Ax^2+Ay^2+Az^2).
+2. Take the two-second intervals (25Hz x 2s = 50 samples) before and after A(T), corresponding to a time window of 101 samples (50+A(T)+50) and ignore the rest of the record.
+3. Data from the remaining axes of each sensor unit are also reduced in the same way, considering the time index obtained from the waist sensor as a reference, resulting in six 101 x 9 arrays of data. Each column of data is represented by an N x 1 vector s = [s1, s2, ..., sN].
+4. Extracted features consist of the minimum, maximum, and mean values, as well as variance, skewness, kurtosis, the first 11 values of the autocorrelation sequence, and the first five peaks of the discrete Fourier transform (DFT) of the signal with corresponding frequencies.
