@@ -56,7 +56,6 @@ def calculate_features(segment):
     
     features.update({f'peak_{i}': spectrum[top_peak] for i, top_peak in enumerate(top_peaks)})
     features.update({f'freq_{i}': frequencies[top_peak] for i, top_peak in enumerate(top_peaks)})
-    
     return features
 
 def load_and_preprocess_data(base_path):
@@ -168,6 +167,7 @@ def plot_roc_curve(y_test, y_score, num_classes, labels):
     plt.legend(loc="lower right")
     plt.savefig('CNN_With_Feature_Selection_ROC.png')  # Save ROC curve
     #plt.show()
+    plt.close()
 
 def plot_confusion_matrix(y_true, y_pred, classes):
     cm = confusion_matrix(y_true, y_pred)
@@ -177,6 +177,7 @@ def plot_confusion_matrix(y_true, y_pred, classes):
     plt.title('CNN With Feature Selection Confusion Matrix')
     plt.savefig('CNN_With_Feature_Selection_Confusion_Matrix.png')  # Save confusion matrix
     #plt.show()
+    plt.close()
 
 def plot_training_accuracy(history, title='Model Accuracy', show_grid=True):
     """
@@ -201,6 +202,7 @@ def plot_training_accuracy(history, title='Model Accuracy', show_grid=True):
         plt.grid(True)
     plt.savefig('CNN_With_Feature_Selection_Accuracy.png')
     #plt.show()
+    plt.close()
 
 # Main script using argparse to handle command-line arguments
 if __name__ == "__main__":
@@ -210,6 +212,10 @@ if __name__ == "__main__":
 
     base_path = args.data_path
     data, labels, scaler, le = load_and_preprocess_data(base_path)
+    print(f"{data.shape=}")
+    print(f"{labels=}")
+    print(f"{data[:10]=}")
+
 
     if data is not None and labels is not None:
         X_train, X_test, y_train, y_test = train_test_split(data, labels, test_size=0.2, random_state=42)
