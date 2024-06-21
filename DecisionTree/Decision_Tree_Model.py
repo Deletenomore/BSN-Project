@@ -158,7 +158,9 @@ def plot_confusion_matrix(y_true, y_pred, classes, title='Confusion Matrix', cma
     plt.title(title)
     plt.ylabel('True label')
     plt.xlabel('Predicted label')
-
+    plt.xticks(rotation=45)  # Rotate labels for better readability
+    plt.yticks(rotation=45)
+    plt.grid(False)  # Turn off the grid to reduce visual clutter
     # Highlighting each cell
     thresh = cm.max() / 2.
     for i in range(cm.shape[0]):
