@@ -20,7 +20,8 @@ from tensorflow.keras.layers import Dense, Conv1D, MaxPooling1D, Flatten, Dropou
 from tensorflow.keras.optimizers import Adam
 import matplotlib.pyplot as plt
 import argparse
-
+from sklearn.metrics import confusion_matrix, ConfusionMatrixDisplay
+from tensorflow.keras.preprocessing.sequence import pad_sequences
 
 # Define the label mapping based on your provided labels
 label_mapping = {
@@ -36,12 +37,12 @@ label_mapping = {
     '910': 'back-lying'
 }
 
-def load_and_preprocess_data(base_path):
+def load_and_preprocess_data(base_path, window_size=50, step_size=25, max_len=100):
     data = []
     labels = []
     for label_folder in os.listdir(base_path):
         label_id = label_folder.split('-')[0]
-        label = label_mapping.get(label_id)
+        label = label_mapping.get(label_id, None)
         if label is None:
             continue
         label_folder_path = os.path.join(base_path, label_folder)
@@ -49,29 +50,40 @@ def load_and_preprocess_data(base_path):
             volunteer_folder_path = os.path.join(label_folder_path, volunteer_folder)
             for test_folder in os.listdir(volunteer_folder_path):
                 test_folder_path = os.path.join(volunteer_folder_path, test_folder)
-                combined_data = []
                 for sensor_file in os.listdir(test_folder_path):
                     sensor_file_path = os.path.join(test_folder_path, sensor_file)
                     sensor_data = pd.read_csv(sensor_file_path)
-                    combined_data.append(sensor_data.values.flatten())
+                    # Ensure the CSV has data and avoid empty data frames
+                    if sensor_data.empty:
+                        continue
+                    # Collect segments of sensor data
+                    for start_pos in range(0, len(sensor_data) - window_size + 1, step_size):
+                        segment = sensor_data.iloc[start_pos:start_pos + window_size]
+                        if segment.shape[0] == window_size:
+                            data.append(segment.values)  # Store as array
+                            labels.append(label)
 
-                # Find the max length of sequences in the current dataset or set a fixed length
-                max_length = 500  # Adjust based on dataset analysis
-                standardized_data = [np.pad(arr, (0, max_length - len(arr)), mode='constant') if len(arr) < max_length else arr[:max_length] for arr in combined_data]
-                combined_data = np.concatenate(standardized_data)
-                data.append(combined_data)
-                labels.append(label)
-
+    # Convert list to numpy array
     data = np.array(data)
+    if data.ndim != 3:
+        raise ValueError("Data array should have three dimensions (samples, time_steps, features).")
     if np.isnan(data).any() or np.isinf(data).any():
         print("Data contains NaN or infinite values. Replacing with zeros.")
         data = np.nan_to_num(data)
 
-    labels = np.array(labels)
+    # Pad data to ensure all sequences have the same length
+    data = pad_sequences(data, maxlen=max_len, dtype='float32', padding='post', truncating='post', value=0.0)
+
+    # Normalize the data
     scaler = MinMaxScaler(feature_range=(0, 1))
+    data = data.reshape(-1, data.shape[2])  # Flatten to fit scaler (assuring 3D to 2D conversion)
     data = scaler.fit_transform(data)
+    data = data.reshape(-1, max_len, data.shape[1])  # Reshape back to 3D after normalization
+
+    # Encode labels
     le = LabelEncoder()
     labels = le.fit_transform(labels)
+
     return data, labels, scaler, le
 
 def build_cnn_model(input_shape):
@@ -99,7 +111,7 @@ def build_cnn_model(input_shape):
     model.compile(optimizer=optimizer, loss='sparse_categorical_crossentropy', metrics=['accuracy'])
     return model
 
-def train_model(data, labels):
+def train_model(data, labels,le):
     X_train, X_test, y_train, y_test = train_test_split(data, labels, test_size=0.2, random_state=42)
     # Ensure data is in the correct shape for a 1D CNN (samples, time steps, features)
     X_train = X_train.reshape((X_train.shape[0], X_train.shape[1], 1))  # Reshape for CNN, assuming each feature is a separate channel
@@ -107,7 +119,12 @@ def train_model(data, labels):
     
     model = build_cnn_model((X_train.shape[1], 1))  # Input shape is (time steps, features)
     history = model.fit(X_train, y_train, epochs=20, validation_data=(X_test, y_test))
+    final_train_accuracy = history.history['accuracy'][-1]
+    final_val_accuracy = history.history['val_accuracy'][-1]
+    print(f"Final Training Accuracy: {final_train_accuracy*100:.2f}%")
+    print(f"Final Validation Accuracy: {final_val_accuracy*100:.2f}%")
     plot_accuracy(history)
+    plot_confusion_matrix(model, X_test, y_test, le) 
     return model, history
 
 def plot_accuracy(history):
@@ -117,7 +134,28 @@ def plot_accuracy(history):
     plt.ylabel('Accuracy')
     plt.xlabel('Epoch')
     plt.legend()
+    plt.savefig("CNN Accuracy Curve.png")
     plt.show()
+    plt.close
+
+def plot_confusion_matrix(model, X_test, y_test, le):
+    y_pred = model.predict(X_test)
+    y_pred_classes = np.argmax(y_pred, axis=1)
+    cm = confusion_matrix(y_test, y_pred_classes)
+    labels = le.inverse_transform(range(len(label_mapping)))  # Convert numeric labels back to original string labels
+    cm_display = ConfusionMatrixDisplay(confusion_matrix=cm, display_labels=labels)
+    fig, ax = plt.subplots(figsize=(10, 10))  # Increase figure size for better visibility
+    cm_display.plot(cmap=plt.cm.Blues, ax=ax)
+    plt.title('Confusion Matrix')
+    plt.xlabel('Predicted Labels')
+    plt.ylabel('True Labels')
+    plt.xticks(rotation=45)  # Rotate labels for better readability
+    plt.yticks(rotation=45)
+    plt.grid(False)  # Turn off the grid to reduce visual clutter
+    plt.savefig("Confusion Matrix.png")
+    plt.show()
+    plt.close()
+
 
 # Saving the model
 def save_model(model, model_path):
@@ -140,7 +178,6 @@ def load_and_predict(model_path, new_data):
 
 
 if __name__ == "__main__":
-    import argparse
     parser = argparse.ArgumentParser(description="Train and Predict using CNN Model")
     parser.add_argument('mode', choices=['train', 'predict'], help="Mode: train a new model or predict using an existing model")
     parser.add_argument('--dataset', type=str, help="Path to the dataset directory for training")
@@ -151,7 +188,7 @@ if __name__ == "__main__":
 
     if args.mode == 'train':
         data, labels, scaler, le = load_and_preprocess_data(args.dataset)
-        model, history = train_model(data, labels)
+        model, history = train_model(data, labels,le)
         save_model(model, args.model)
         # Optionally save the scaler and label encoder for later use in prediction
         joblib.dump(scaler, 'scaler.gz')
