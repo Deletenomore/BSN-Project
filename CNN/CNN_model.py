@@ -88,43 +88,57 @@ def load_and_preprocess_data(base_path, window_size=50, step_size=25, max_len=10
 
 def build_cnn_model(input_shape):
     model = Sequential()
-    # First convolutional layer
+    # Adjust the number of input channels (features per timestep) in the first Conv1D layer
     model.add(Conv1D(filters=64, kernel_size=3, activation='relu', input_shape=input_shape))
     model.add(BatchNormalization())
     model.add(MaxPooling1D(pool_size=2))
     model.add(Dropout(0.2))
 
-    # Second convolutional layer
+    # Additional layers
     model.add(Conv1D(filters=128, kernel_size=3, activation='relu'))
     model.add(BatchNormalization())
     model.add(MaxPooling1D(pool_size=2))
     model.add(Dropout(0.3))
 
-    # Flatten and dense layers
     model.add(Flatten())
     model.add(Dense(100, activation='relu'))
     model.add(Dropout(0.4))
-    model.add(Dense(10, activation='softmax'))  # Assuming 10 classes for classification
+    model.add(Dense(10, activation='softmax'))  # Assuming 10 classes
 
     # Compile the model
     optimizer = Adam(learning_rate=0.001)
     model.compile(optimizer=optimizer, loss='sparse_categorical_crossentropy', metrics=['accuracy'])
     return model
 
-def train_model(data, labels,le):
+
+def train_model(data, labels, le):
+    # Split the data
     X_train, X_test, y_train, y_test = train_test_split(data, labels, test_size=0.2, random_state=42)
-    # Ensure data is in the correct shape for a 1D CNN (samples, time steps, features)
-    X_train = X_train.reshape((X_train.shape[0], X_train.shape[1], 1))  # Reshape for CNN, assuming each feature is a separate channel
-    X_test = X_test.reshape((X_test.shape[0], X_test.shape[1], 1))
     
-    model = build_cnn_model((X_train.shape[1], 1))  # Input shape is (time steps, features)
+    # Calculate the number of features
+    num_features = X_train.shape[1]  # Assuming the number of features is the second dimension of X_train
+    
+    print("Shape of X_train:", X_train.shape)
+    print("Shape of X_test:", X_test.shape)
+
+    # # Correctly reshape the data for a 1D CNN, assuming each feature is a separate channel
+    # X_train = X_train.reshape((X_train.shape[0], num_features, 1))
+    # X_test = X_test.reshape((X_test.shape[0], num_features, 1))
+    
+    # Build and train the model
+    model = build_cnn_model((num_features, 10))
     history = model.fit(X_train, y_train, epochs=20, validation_data=(X_test, y_test))
+    
+    # Print final accuracies for training and validation sets
     final_train_accuracy = history.history['accuracy'][-1]
     final_val_accuracy = history.history['val_accuracy'][-1]
-    print(f"Final Training Accuracy: {final_train_accuracy*100:.2f}%")
-    print(f"Final Validation Accuracy: {final_val_accuracy*100:.2f}%")
+    print(f"Final Training Accuracy: {final_train_accuracy * 100:.2f}%")
+    print(f"Final Validation Accuracy: {final_val_accuracy * 100:.2f}%")
+    
+    # Optional: Plot accuracy and confusion matrix
     plot_accuracy(history)
-    plot_confusion_matrix(model, X_test, y_test, le) 
+    plot_confusion_matrix(model, X_test, y_test, le)
+    
     return model, history
 
 def plot_accuracy(history):
