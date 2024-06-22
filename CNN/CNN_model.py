@@ -148,7 +148,7 @@ def plot_accuracy(history):
     plt.ylabel('Accuracy')
     plt.xlabel('Epoch')
     plt.legend()
-    plt.savefig("CNN Accuracy Curve.png")
+    plt.savefig("CNN_V1 Accuracy Curve.png")
     plt.show()
     plt.close
 
@@ -160,13 +160,13 @@ def plot_confusion_matrix(model, X_test, y_test, le):
     cm_display = ConfusionMatrixDisplay(confusion_matrix=cm, display_labels=labels)
     fig, ax = plt.subplots(figsize=(10, 10))  # Increase figure size for better visibility
     cm_display.plot(cmap=plt.cm.Blues, ax=ax)
-    plt.title('Confusion Matrix')
+    plt.title('CNN_V1 Confusion Matrix')
     plt.xlabel('Predicted Labels')
     plt.ylabel('True Labels')
     plt.xticks(rotation=45)  # Rotate labels for better readability
     plt.yticks(rotation=45)
     plt.grid(False)  # Turn off the grid to reduce visual clutter
-    plt.savefig("Confusion Matrix.png")
+    plt.savefig("CNN Confusion Matrix.png")
     plt.show()
     plt.close()
 
