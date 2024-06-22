@@ -2,7 +2,7 @@
 #1. Create a virtual environment: venv: python -m venv myenv (replaced myenv as needed ) | conda: conda create -n myenv python= "version number"
 #2. Activate the virtual environment, windows: myenv\Scripts\activate | macOS and Linux: source myenv/bin/activate
 #3. Initialize the environment by requirements.txt: pip install -r requirements.txt
-#4. Run the code: python KNN_V2.py "datapath"
+#4. Run the code: python KNN_V2.py "\datapath"
 
 import os
 import numpy as np
@@ -16,6 +16,7 @@ from sklearn.metrics import roc_curve, auc, confusion_matrix, ConfusionMatrixDis
 import matplotlib.pyplot as plt
 import argparse
 from itertools import cycle
+import seaborn as sns
 
 # Define label mapping globally
 label_mapping = {
@@ -145,9 +146,14 @@ def plot_roc_curve(y_test, y_score, num_classes, labels):
 
 def plot_confusion_matrix(y_true, y_pred, labels):
     cm = confusion_matrix(y_true, y_pred)
+    cmap=plt.cm.Blues
     disp = ConfusionMatrixDisplay(confusion_matrix=cm, display_labels=labels)
-    disp.plot(cmap=plt.cm.Blues)
-    plt.xticks(rotation=90)
+    disp.plot(cmap=cmap)
+    plt.figure(figsize=(10, 8))
+    sns.heatmap(cm, annot=True, fmt='d', cmap=cmap, xticklabels=labels, yticklabels=labels)
+    plt.xticks(rotation=45)  # Rotate labels for better readability
+    plt.yticks(rotation=45)
+    plt.grid(False) 
     plt.title('KNN With Feature Selection Confusion Matrix')
     plt.savefig('KNN_With_Feature_Selection_Confusion_Matrix.png')  # Save confusion matrix
     #plt.show()
@@ -216,8 +222,8 @@ def main(data_path):
     #print_accuracy(y_test, y_pred)
 
     #find the best N neighbors
-    best_knn = tune_hyperparameters(X_train, y_train)
-    plot_validation_curve(X_train, y_train)
+    #best_knn = tune_hyperparameters(X_train, y_train)
+    #plot_validation_curve(X_train, y_train)
     
     # Testing the best model
     y_pred = best_knn.predict(X_test)
