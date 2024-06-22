@@ -111,12 +111,35 @@ def load_and_preprocess_data(base_path):
 
 
 
-def build_cnn_model(input_shape, num_classes):
+# def build_cnn_model(input_shape, num_classes):
+#     model = Sequential([
+#         Conv1D(32, 3, activation='relu', input_shape=input_shape),
+#         MaxPooling1D(2),
+#         Dropout(0.2),
+#         Conv1D(64, 3, activation='relu'),
+#         MaxPooling1D(2),
+#         Dropout(0.2),
+#         Flatten(),
+#         Dense(128, activation='relu'),
+#         Dropout(0.5),
+#         Dense(num_classes, activation='softmax')
+#     ])
+#     model.compile(optimizer=Adam(), loss='sparse_categorical_crossentropy', metrics=['accuracy'])
+#     return model
+
+#Optimized version
+def build_cnn_model(input_shape, num_classes,num_samples):
+
+    Ni = input_shape[1]  # Number of features per timestep
+    No = num_classes     # Number of output classes
+    Ns = num_samples     # Number of samples in the training dataset
+    alpha = 5            # Adjust based on model complexity and generalization needs
+    Nh = int(Ns / (alpha * (Ni + No)))
     model = Sequential([
-        Conv1D(32, 3, activation='relu', input_shape=input_shape),
+        Conv1D(Nh, 3, activation='relu', input_shape=input_shape),
         MaxPooling1D(2),
         Dropout(0.2),
-        Conv1D(64, 3, activation='relu'),
+        Conv1D(Nh, 3, activation='relu'),
         MaxPooling1D(2),
         Dropout(0.2),
         Flatten(),
@@ -169,17 +192,38 @@ def plot_roc_curve(y_test, y_score, num_classes, labels):
     #plt.show()
     plt.close()
 
-def plot_confusion_matrix(y_true, y_pred, classes):
-    cm = confusion_matrix(y_true, y_pred)
-    disp = ConfusionMatrixDisplay(confusion_matrix=cm, display_labels=classes)
-    disp.plot(cmap=plt.cm.Blues)
-    plt.xticks(rotation=90)
-    plt.title('CNN With Feature Selection Confusion Matrix')
-    plt.savefig('CNN_With_Feature_Selection_Confusion_Matrix.png')  # Save confusion matrix
-    #plt.show()
+# def plot_confusion_matrix(y_true, y_pred, classes):
+#     cm = confusion_matrix(y_true, y_pred)
+#     disp = ConfusionMatrixDisplay(confusion_matrix=cm, display_labels=classes)
+#     disp.plot(cmap=plt.cm.Blues)
+#     plt.xticks(rotation=90)
+#     plt.title('CNN With Feature Selection Confusion Matrix')
+#     plt.savefig('CNN_With_Feature_Selection_Confusion_Matrix.png')  # Save confusion matrix
+#     #plt.show()
+#     plt.close()
+    
+def plot_confusion_matrix(model, X_test, y_test, le):
+    y_pred = model.predict(X_test)
+    y_pred_classes = np.argmax(y_pred, axis=1)
+    cm = confusion_matrix(y_test, y_pred_classes)
+    labels = le.inverse_transform(range(len(label_mapping)))  # Convert numeric labels back to original string labels
+    cm_display = ConfusionMatrixDisplay(confusion_matrix=cm, display_labels=labels)
+    fig, ax = plt.subplots(figsize=(10, 10))  # Increase figure size for better visibility
+    cm_display.plot(cmap=plt.cm.Blues, ax=ax)
+    plt.title('CNN_V2 Confusion Matrix')
+    plt.xlabel('Predicted Labels')
+    plt.ylabel('True Labels')
+    plt.xticks(rotation=45)  # Rotate labels for better readability
+    plt.yticks(rotation=45)
+    plt.grid(False)  # Turn off the grid to reduce visual clutter
+    plt.savefig("CNN_V2 Confusion Matrix.png")
+    plt.show()
     plt.close()
 
-def plot_training_accuracy(history, title='Model Accuracy', show_grid=True):
+
+
+
+def plot_training_accuracy(history, title='CNN_V2 Accuracy', show_grid=True):
     """
     Plots the training and validation accuracy from a Keras model training history.
     
@@ -200,7 +244,7 @@ def plot_training_accuracy(history, title='Model Accuracy', show_grid=True):
     
     if show_grid:
         plt.grid(True)
-    plt.savefig('CNN_With_Feature_Selection_Accuracy.png')
+    plt.savefig('CNN_V2 Accuracy.png')
     #plt.show()
     plt.close()
 
@@ -212,30 +256,35 @@ if __name__ == "__main__":
 
     base_path = args.data_path
     data, labels, scaler, le = load_and_preprocess_data(base_path)
-    print(f"{data.shape=}")
-    print(f"{labels=}")
-    print(f"{data[:10]=}")
-
 
     if data is not None and labels is not None:
         X_train, X_test, y_train, y_test = train_test_split(data, labels, test_size=0.2, random_state=42)
         X_train = X_train.reshape((X_train.shape[0], X_train.shape[1], 1))
         X_test = X_test.reshape((X_test.shape[0], X_test.shape[1], 1))
         num_classes = len(np.unique(labels))
+        num_size = X_train.size
 
-        model = build_cnn_model(X_train.shape[1:], num_classes)
+        #model = build_cnn_model(X_train.shape[1:], num_classes,num_size)
+        model = build_cnn_model((X_train.shape[1], X_train.shape[2]),num_classes,num_size)
         history = model.fit(X_train, y_train, epochs=20, validation_data=(X_test, y_test), batch_size=64)
 
         test_loss, test_accuracy = model.evaluate(X_test, y_test)
         print(f"Test accuracy: {test_accuracy * 100:.2f}%")
-        
+        final_train_accuracy = history.history['accuracy'][-1]
+        final_val_accuracy = history.history['val_accuracy'][-1]
+        print(f"Final Training Accuracy: {final_train_accuracy*100:.2f}%")
+        print(f"Final Validation Accuracy: {final_val_accuracy*100:.2f}%")
+
+        #print("Shape of X_test:", X_test.shape)
+        if X_test.ndim != 3 or X_test.shape[-1] != 1:
+            raise ValueError("X_test is not correctly shaped. Expected 3 dimensions with the last dimension being 1.")
 
         y_pred = model.predict(X_test)
         y_test_binarized = label_binarize(y_test, classes=[i for i in range(num_classes)])
         class_names = [label for label in label_mapping.values()]
 
         plot_roc_curve(y_test_binarized, y_pred, num_classes, class_names)
-        plot_confusion_matrix(y_test, y_pred.argmax(axis=1), class_names)
+        plot_confusion_matrix(model,X_test,y_test, le)
         plot_training_accuracy(history, title='Training and Validation Accuracy', show_grid=True)
     else:
         print("Failed to load data.")
