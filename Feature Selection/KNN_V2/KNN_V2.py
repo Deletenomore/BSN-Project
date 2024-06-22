@@ -144,17 +144,19 @@ def plot_roc_curve(y_test, y_score, num_classes, labels):
     #plt.show()
     plt.close()
 
-def plot_confusion_matrix(y_true, y_pred, labels):
-    cm = confusion_matrix(y_true, y_pred)
-    cmap=plt.cm.Blues
-    disp = ConfusionMatrixDisplay(confusion_matrix=cm, display_labels=labels)
-    disp.plot(cmap=cmap)
-    plt.figure(figsize=(10, 8))
-    sns.heatmap(cm, annot=True, fmt='d', cmap=cmap, xticklabels=labels, yticklabels=labels)
+def plot_confusion_matrix(model, X_test, y_test, le):
+    y_pred = model.predict(X_test)
+    cm = confusion_matrix(y_test, y_pred)
+    labels = le.inverse_transform(range(len(label_mapping)))  # Convert numeric labels back to original string labels
+    cm_display = ConfusionMatrixDisplay(confusion_matrix=cm, display_labels=labels)
+    fig, ax = plt.subplots(figsize=(10, 10))  # Increase figure size for better visibility
+    cm_display.plot(cmap=plt.cm.Blues, ax=ax)
+    plt.xlabel('Predicted Labels')
+    plt.ylabel('True Labels')
     plt.xticks(rotation=45)  # Rotate labels for better readability
     plt.yticks(rotation=45)
     plt.grid(False) 
-    plt.title('KNN With Feature Selection Confusion Matrix')
+    plt.title('KNN_V2 Confusion Matrix')
     plt.savefig('KNN_With_Feature_Selection_Confusion_Matrix.png')  # Save confusion matrix
     #plt.show()
     plt.close()
@@ -218,16 +220,16 @@ def main(data_path):
     y_test_binarized = label_binarize(y_test, classes=np.unique(labels))
 
     plot_roc_curve(y_test_binarized, y_scores, len(np.unique(labels)), class_names)
-    plot_confusion_matrix(y_test, y_pred, class_names)
-    #print_accuracy(y_test, y_pred)
+    plot_confusion_matrix(knn_model,X_test,y_test, le)
+    print_accuracy(y_test, y_pred)
 
     #find the best N neighbors
     #best_knn = tune_hyperparameters(X_train, y_train)
     #plot_validation_curve(X_train, y_train)
     
     # Testing the best model
-    y_pred = best_knn.predict(X_test)
-    print("Test Accuracy:", accuracy_score(y_test, y_pred))
+    # y_pred = best_knn.predict(X_test)
+    # print("Test Accuracy:", accuracy_score(y_test, y_pred))
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Train a KNN model on sensor data.')
