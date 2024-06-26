@@ -319,6 +319,6 @@ if __name__ == "__main__":
 
         plot_roc_curve(y_test_binarized, y_pred, num_classes, class_names)
         plot_confusion_matrix(y_test, y_pred.argmax(axis=1), class_names)
-        plot_training_accuracy(history, title='Training and Validation Accuracy', show_grid=True)
+        plot_training_accuracy(history, show_grid=True)
     else:
         print("Failed to load data.")
